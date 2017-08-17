@@ -103,15 +103,14 @@ describe('VariableDeclarators', function() {
 
     it('finds variable occurrences', function() {
       const occurrences = Collection.fromNodes(nodes)
-        .find(types.Identifier, {name: 'foo'})
-        .filter(VariableDeclaratorCollection.filters.isVariableOccurrence());
+        .filter(VariableDeclaratorCollection.filters.isVariableOccurrence('foo'));
 
       expect(occurrences.length).toBe(3);
     });
   });
 
   describe('Transform', function() {
-    it('renames variable declarations considering scope', function() {
+    it.only('renames variable declarations considering scope', function() {
       const declarators = Collection.fromNodes(nodes)
         .findVariableDeclarators()
         .filter(VariableDeclaratorCollection.filters.requiresModule('module'))

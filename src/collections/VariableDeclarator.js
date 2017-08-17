@@ -34,6 +34,48 @@ const globalMethods = {
   findVariableDeclarators: function(name) {
     const filter = name ? {id: {name: name}} : null;
     return this.find(VariableDeclarator, filter);
+  },
+
+  findVariableOccurrences: function(name) {
+    return this.forEach(function(path) {
+      const rootScope = path.scope;
+      const rootPath = rootScope.path;
+      Collection.fromPaths([rootPath])
+        .find(types.Identifier, {name: name})
+        .filter(function(path) {
+          // ignore non-variables
+          const parent = path.parent.node;
+
+          if (
+            types.MemberExpression.check(parent) &&
+            parent.property === path.node &&
+            !parent.computed
+          ) {
+            // obj.oldName
+            return false;
+          }
+
+          if (
+            types.Property.check(parent) &&
+            parent.key === path.node &&
+            !parent.computed
+          ) {
+            // { oldName: 3 }
+            return false;
+          }
+
+          if (
+            types.MethodDefinition.check(parent) &&
+            parent.key === path.node &&
+            !parent.computed
+          ) {
+            // class A { oldName() {} }
+            return false;
+          }
+
+          return true;
+        });
+    });
   }
 };
 
@@ -62,47 +104,6 @@ const filterMethods = {
           n => astNodesAreEquivalent(node.init.arguments[0], b.literal(n))
         );
     };
-  },
-
-  /**
-   * Returns a function that returns true if the provided path is a variable occurrence.
-   *
-   * @return {Function}
-   */
-  isVariableOccurrence: function() {
-    return function(path) {
-      // ignore non-variables
-      const parent = path.parent.node;
-
-      if (
-        types.MemberExpression.check(parent) &&
-        parent.property === path.node &&
-        !parent.computed
-      ) {
-        // obj.oldName
-        return false;
-      }
-
-      if (
-        types.Property.check(parent) &&
-        parent.key === path.node &&
-        !parent.computed
-      ) {
-        // { oldName: 3 }
-        return false;
-      }
-
-      if (
-        types.MethodDefinition.check(parent) &&
-        parent.key === path.node &&
-        !parent.computed
-      ) {
-        // class A { oldName() {} }
-        return false;
-      }
-
-      return true;
-    }
   }
 };
 
@@ -124,8 +125,7 @@ const transformMethods = {
       const rootScope = path.scope;
       const rootPath = rootScope.path;
       Collection.fromPaths([rootPath])
-        .find(types.Identifier, {name: oldName})
-        .filter(filterMethods.isVariableOccurrence())
+        .filter(filterMethods.isVariableOccurrence(oldName))
         .forEach(function(path) {
           let scope = path.scope;
           while (scope && scope !== rootScope) {
