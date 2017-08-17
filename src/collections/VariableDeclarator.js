@@ -13,7 +13,6 @@
 const _ = require('lodash');
 const Collection = require('../Collection');
 const NodeCollection = require('./Node');
-const matchNode = require('../matchNode');
 const recast = require('recast');
 
 const astNodesAreEquivalent = recast.types.astNodesAreEquivalent;
@@ -63,6 +62,47 @@ const filterMethods = {
           n => astNodesAreEquivalent(node.init.arguments[0], b.literal(n))
         );
     };
+  },
+
+  /**
+   * Returns a function that returns true if the provided path is a variable occurrence.
+   *
+   * @return {Function}
+   */
+  isVariableOccurrence: function() {
+    return function(path) {
+      // ignore non-variables
+      const parent = path.parent.node;
+
+      if (
+        types.MemberExpression.check(parent) &&
+        parent.property === path.node &&
+        !parent.computed
+      ) {
+        // obj.oldName
+        return false;
+      }
+
+      if (
+        types.Property.check(parent) &&
+        parent.key === path.node &&
+        !parent.computed
+      ) {
+        // { oldName: 3 }
+        return false;
+      }
+
+      if (
+        types.MethodDefinition.check(parent) &&
+        parent.key === path.node &&
+        !parent.computed
+      ) {
+        // class A { oldName() {} }
+        return false;
+      }
+
+      return true;
+    }
   }
 };
 
@@ -85,38 +125,7 @@ const transformMethods = {
       const rootPath = rootScope.path;
       Collection.fromPaths([rootPath])
         .find(types.Identifier, {name: oldName})
-        .filter(function(path) { // ignore non-variables
-          const parent = path.parent.node;
-
-          if (
-            types.MemberExpression.check(parent) &&
-            parent.property === path.node &&
-            !parent.computed
-          ) {
-            // obj.oldName
-            return false;
-          }
-
-          if (
-            types.Property.check(parent) &&
-            parent.key === path.node &&
-            !parent.computed
-          ) {
-            // { oldName: 3 }
-            return false;
-          }
-
-          if (
-            types.MethodDefinition.check(parent) &&
-            parent.key === path.node &&
-            !parent.computed
-          ) {
-            // class A { oldName() {} }
-            return false;
-          }
-
-          return true;
-        })
+        .filter(filterMethods.isVariableOccurrence())
         .forEach(function(path) {
           let scope = path.scope;
           while (scope && scope !== rootScope) {
